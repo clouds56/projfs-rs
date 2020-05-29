@@ -1,0 +1,12 @@
+[package]
+name = "projfs"
+version = "0.1.0"
+authors = ["Clouds Flowing <clouds.flowing@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+projfs-sys = { path = "sys" }
+[workspace]
+members = [ "sys" ]
