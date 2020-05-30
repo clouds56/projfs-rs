@@ -17,8 +17,19 @@ fn main() {
     .header("wrapper.h")
     // Tell cargo to invalidate the built crate whenever any of the
     // included header files changed.
-    .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-    .whitelist_function("PrjStartVirtualizing")
+    .parse_callbacks(Box::new(bindgen::CargoCallbacks));
+  let bindings = [
+    "PrjMarkDirectoryAsPlaceholder",
+    "PrjStartVirtualizing",
+    "PrjStopVirtualizing",
+    "PrjFillDirEntryBuffer",
+    "PrjFileNameMatch",
+    "PrjWritePlaceholderInfo",
+    "PrjWriteFileData",
+    "PrjAllocateAlignedBuffer",
+    "PrjFreeAlignedBuffer",
+  ].iter().fold(bindings, |b, s| b.whitelist_function(s));
+  let bindings = bindings
     // Finish the builder and generate the bindings.
     .generate()
     // Unwrap the Result and panic on failure.
