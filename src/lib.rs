@@ -100,24 +100,34 @@ fn trait_to_table<T: helper::RawProjFS>() -> sys::PRJ_CALLBACKS {
   cb
 }
 
-pub struct Instance {
+pub struct Instance<T> {
   raw: sys::PRJ_NAMESPACE_VIRTUALIZATION_CONTEXT,
+  this: *mut T,
   cb: sys::PRJ_CALLBACKS,
 }
 
-pub fn start_proj_virtualization<P: AsRef<Path>, T: ProjFS + helper::RawProjFS>(path: P, this: Box<T>) -> Result<Instance, sys::HRESULT> {
+pub fn start_proj_virtualization<P: AsRef<Path>, T: ProjFS + helper::RawProjFS>(path: P, this: Box<T>) -> Result<Instance<T>, sys::HRESULT> {
   use std::os::windows::prelude::*;
   let mut instance = Instance {
     raw: std::ptr::null_mut(),
+    this: Box::leak(this),
     cb: trait_to_table::<T>()
   };
   let path = path.as_ref().as_os_str();
   let path_str: Vec<u16> = path.encode_wide().chain(std::iter::once(0)).collect();
+  println!("start at {:?}", path_str);
   let result = unsafe {
+    let id: Guid = std::mem::zeroed();
+    sys::PrjMarkDirectoryAsPlaceholder(
+      path_str.as_ptr(),
+      std::ptr::null(),
+      std::ptr::null(),
+      &id,
+    );
     sys::PrjStartVirtualizing(
       path_str.as_ptr(),
       &instance.cb,
-      Box::leak(this) as *const T as *const std::ffi::c_void,
+      instance.this as *const std::ffi::c_void,
       std::ptr::null(),
       &mut instance.raw
     )
@@ -126,5 +136,14 @@ pub fn start_proj_virtualization<P: AsRef<Path>, T: ProjFS + helper::RawProjFS>(
     Ok(instance)
   } else {
     Err(result)
+  }
+}
+
+impl<T> Drop for Instance<T> {
+  fn drop(&mut self) {
+    unsafe { Box::from_raw(self.this) };
+    if self.raw != std::ptr::null_mut() {
+      unsafe { sys::PrjStopVirtualizing(self.raw) }
+    }
   }
 }

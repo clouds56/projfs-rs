@@ -8,5 +8,9 @@ edition = "2018"
 
 [dependencies]
 projfs-sys = { path = "sys" }
+
+[dev-dependencies]
+log = "*"
+
 [workspace]
 members = [ "sys" ]
