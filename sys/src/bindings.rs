@@ -23,7 +23,7 @@ pub union _LARGE_INTEGER {
     _bindgen_union_align: u64,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct _LARGE_INTEGER__bindgen_ty_1 {
     pub LowPart: DWORD,
     pub HighPart: LONG,
@@ -66,7 +66,7 @@ fn bindgen_test_layout__LARGE_INTEGER__bindgen_ty_1() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct _LARGE_INTEGER__bindgen_ty_2 {
     pub LowPart: DWORD,
     pub HighPart: LONG,
@@ -144,7 +144,7 @@ fn bindgen_test_layout__LARGE_INTEGER() {
 pub type LARGE_INTEGER = _LARGE_INTEGER;
 pub type BOOLEAN = BYTE;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct _GUID {
     pub Data1: ::std::os::raw::c_ulong,
     pub Data2: ::std::os::raw::c_ushort,
@@ -238,7 +238,7 @@ pub const PRJ_NOTIFICATION_PRJ_NOTIFICATION_FILE_HANDLE_CLOSED_FILE_DELETED: PRJ
 pub const PRJ_NOTIFICATION_PRJ_NOTIFICATION_FILE_PRE_CONVERT_TO_FULL: PRJ_NOTIFICATION = 4096;
 pub type PRJ_NOTIFICATION = i32;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_NAMESPACE_VIRTUALIZATION_CONTEXT__ {
     pub unused: ::std::os::raw::c_int,
 }
@@ -276,7 +276,7 @@ fn bindgen_test_layout_PRJ_NAMESPACE_VIRTUALIZATION_CONTEXT__() {
 }
 pub type PRJ_NAMESPACE_VIRTUALIZATION_CONTEXT = *mut PRJ_NAMESPACE_VIRTUALIZATION_CONTEXT__;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_DIR_ENTRY_BUFFER_HANDLE__ {
     pub unused: ::std::os::raw::c_int,
 }
@@ -307,7 +307,7 @@ fn bindgen_test_layout_PRJ_DIR_ENTRY_BUFFER_HANDLE__() {
 }
 pub type PRJ_DIR_ENTRY_BUFFER_HANDLE = *mut PRJ_DIR_ENTRY_BUFFER_HANDLE__;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_NOTIFICATION_MAPPING {
     pub NotificationBitMask: PRJ_NOTIFY_TYPES,
     pub NotificationRoot: PCWSTR,
@@ -356,7 +356,7 @@ pub const PRJ_STARTVIRTUALIZING_FLAGS_PRJ_FLAG_USE_NEGATIVE_PATH_CACHE:
     PRJ_STARTVIRTUALIZING_FLAGS = 1;
 pub type PRJ_STARTVIRTUALIZING_FLAGS = i32;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_STARTVIRTUALIZING_OPTIONS {
     pub Flags: PRJ_STARTVIRTUALIZING_FLAGS,
     pub PoolThreadCount: UINT32,
@@ -619,7 +619,7 @@ pub struct PRJ_PLACEHOLDER_INFO {
     pub VariableData: [UINT8; 1usize],
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_PLACEHOLDER_INFO__bindgen_ty_1 {
     pub EaBufferSize: UINT32,
     pub OffsetToFirstEa: UINT32,
@@ -667,7 +667,7 @@ fn bindgen_test_layout_PRJ_PLACEHOLDER_INFO__bindgen_ty_1() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_PLACEHOLDER_INFO__bindgen_ty_2 {
     pub SecurityBufferSize: UINT32,
     pub OffsetToSecurityDescriptor: UINT32,
@@ -715,7 +715,7 @@ fn bindgen_test_layout_PRJ_PLACEHOLDER_INFO__bindgen_ty_2() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_PLACEHOLDER_INFO__bindgen_ty_3 {
     pub StreamsInfoBufferSize: UINT32,
     pub OffsetToFirstStreamInfo: UINT32,
@@ -879,7 +879,7 @@ pub const PRJ_CALLBACK_DATA_FLAGS_PRJ_CB_DATA_FLAG_ENUM_RETURN_SINGLE_ENTRY:
     PRJ_CALLBACK_DATA_FLAGS = 2;
 pub type PRJ_CALLBACK_DATA_FLAGS = i32;
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_CALLBACK_DATA {
     pub Size: UINT32,
     pub Flags: PRJ_CALLBACK_DATA_FLAGS,
@@ -1035,7 +1035,7 @@ pub union PRJ_NOTIFICATION_PARAMETERS {
     _bindgen_union_align: u32,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_NOTIFICATION_PARAMETERS__bindgen_ty_1 {
     pub NotificationMask: PRJ_NOTIFY_TYPES,
 }
@@ -1072,7 +1072,7 @@ fn bindgen_test_layout_PRJ_NOTIFICATION_PARAMETERS__bindgen_ty_1() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_NOTIFICATION_PARAMETERS__bindgen_ty_2 {
     pub NotificationMask: PRJ_NOTIFY_TYPES,
 }
@@ -1109,7 +1109,7 @@ fn bindgen_test_layout_PRJ_NOTIFICATION_PARAMETERS__bindgen_ty_2() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_NOTIFICATION_PARAMETERS__bindgen_ty_3 {
     pub IsFileModified: BOOLEAN,
 }
@@ -1196,7 +1196,7 @@ fn bindgen_test_layout_PRJ_NOTIFICATION_PARAMETERS() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub struct PRJ_CALLBACKS {
     pub StartDirectoryEnumerationCallback: ::std::option::Option<
         unsafe extern "C" fn(arg1: *const PRJ_CALLBACK_DATA, arg2: *const GUID) -> HRESULT,

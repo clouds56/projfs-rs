@@ -3,7 +3,7 @@ pub use projfs_sys as sys;
 
 pub type VersionInfo = *const sys::PRJ_PLACEHOLDER_VERSION_INFO;
 pub type Flags = sys::PRJ_CALLBACK_DATA_FLAGS;
-pub type Guid = sys::GUID;
+pub type Guid = uuid::Uuid;
 
 extern "C" {
   fn wcslen(ptr: *const std::os::raw::c_ushort) -> usize;
@@ -23,6 +23,20 @@ impl Into<PathBuf> for RawPath {
   }
 }
 
+pub fn guid_from_raw(guid: sys::GUID) -> Guid {
+  Guid::from_fields(guid.Data1, guid.Data2, guid.Data3, &guid.Data4).expect("guid data4 len")
+}
+
+pub fn guid_to_raw(guid: Guid) -> sys::GUID {
+  let fields = guid.as_fields();
+  sys::GUID {
+    Data1: fields.0,
+    Data2: fields.1,
+    Data3: fields.2,
+    Data4: fields.3.clone(),
+  }
+}
+
 pub trait ProjFS {
   fn start_dir_enum(&self, id: Guid, path: RawPath, version: VersionInfo) -> Result<(), sys::HRESULT>;
   fn end_dir_enum(&self, id: Guid, version: VersionInfo) -> Result<(), sys::HRESULT>;
@@ -36,17 +50,17 @@ pub trait ProjFS {
 mod helper {
   #![allow(non_snake_case)]
   use super::sys::*;
-  use super::ProjFS;
+  use super::*;
   pub trait RawProjFS: ProjFS + Sized {
     unsafe extern "C" fn StartDirectoryEnumerationCallback(arg1: *const PRJ_CALLBACK_DATA, arg2: *const GUID) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      this.start_dir_enum(*arg2, data.FilePathName.into(), data.VersionInfo).err().unwrap_or_default()
+      this.start_dir_enum(guid_from_raw(*arg2), data.FilePathName.into(), data.VersionInfo).err().unwrap_or_default()
     }
     unsafe extern "C" fn EndDirectoryEnumerationCallback(arg1: *const PRJ_CALLBACK_DATA, arg2: *const GUID) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      this.end_dir_enum(*arg2, data.VersionInfo).err().unwrap_or_default()
+      this.end_dir_enum(guid_from_raw(*arg2), data.VersionInfo).err().unwrap_or_default()
     }
     unsafe extern "C" fn GetDirectoryEnumerationCallback(
       arg1: *const PRJ_CALLBACK_DATA,
@@ -56,7 +70,7 @@ mod helper {
     ) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      this.get_dir_enum(*arg2, data.FilePathName.into(), data.Flags, data.VersionInfo, arg3.into(), arg4).err().unwrap_or_default()
+      this.get_dir_enum(guid_from_raw(*arg2), data.FilePathName.into(), data.Flags, data.VersionInfo, arg3.into(), arg4).err().unwrap_or_default()
     }
     unsafe extern "C" fn GetPlaceholderInfoCallback(arg1: *const PRJ_CALLBACK_DATA) -> HRESULT {
       let data = arg1.as_ref().unwrap();
@@ -71,7 +85,7 @@ mod helper {
     unsafe extern "C" fn GetFileDataCallback(arg1: *const PRJ_CALLBACK_DATA, arg2: UINT64, arg3: UINT32) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      this.read(data.FilePathName.into(), data.VersionInfo, data.DataStreamId, arg2 as u64, arg3 as usize).err().unwrap_or_default()
+      this.read(data.FilePathName.into(), data.VersionInfo, guid_from_raw(data.DataStreamId), arg2 as u64, arg3 as usize).err().unwrap_or_default()
     }
     // unsafe extern "C" fn QueryFileNameCallback(arg1: *const PRJ_CALLBACK_DATA) -> HRESULT;
     // unsafe extern "C" fn NotificationCallback(
@@ -113,16 +127,17 @@ pub fn start_proj_virtualization<P: AsRef<Path>, T: ProjFS + helper::RawProjFS>(
     this: Box::leak(this),
     cb: trait_to_table::<T>()
   };
-  let path = path.as_ref().as_os_str();
-  let path_str: Vec<u16> = path.encode_wide().chain(std::iter::once(0)).collect();
-  println!("start at {:?}", path_str);
+  let path = path.as_ref().canonicalize().unwrap();
+  let path_str: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+  println!("start at {:?}", path);
   let result = unsafe {
-    let id: Guid = std::mem::zeroed();
+    // let id = uuid::Uuid::new_v5(uuid::Uuid::NAMESPACE_URL, std::slice::from_raw_parts(path_str.as_ptr(), path_str.len()*2));
+    let id = uuid::Uuid::new_v4();
     sys::PrjMarkDirectoryAsPlaceholder(
       path_str.as_ptr(),
       std::ptr::null(),
       std::ptr::null(),
-      &id,
+      &guid_to_raw(id),
     );
     sys::PrjStartVirtualizing(
       path_str.as_ptr(),

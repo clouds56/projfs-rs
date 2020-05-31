@@ -30,8 +30,6 @@ fn main() {
     "PrjFreeAlignedBuffer",
   ].iter().fold(bindings, |b, s| b.whitelist_function(s));
   let bindings = bindings
-    .derive_hash(true)
-    .derive_eq(true)
     // Finish the builder and generate the bindings.
     .generate()
     // Unwrap the Result and panic on failure.
