@@ -22,6 +22,11 @@ impl Into<PathBuf> for RawPath {
     std::ffi::OsString::from_wide(ptr).into()
   }
 }
+impl RawPath {
+  pub fn to_path_buf(self) -> PathBuf {
+    self.into()
+  }
+}
 
 pub fn guid_from_raw(guid: sys::GUID) -> Guid {
   Guid::from_fields(guid.Data1, guid.Data2, guid.Data3, &guid.Data4).expect("guid data4 len")
@@ -97,7 +102,7 @@ mod helper {
     // ) -> HRESULT;
     // unsafe extern "C" fn CancelCommandCallback(arg1: *const PRJ_CALLBACK_DATA);
   }
-  impl<T: ProjFS> RawProjFS for T { }
+  impl<T: ProjFS + Sync> RawProjFS for T { }
 }
 
 fn trait_to_table<T: helper::RawProjFS>() -> sys::PRJ_CALLBACKS {
@@ -120,7 +125,7 @@ pub struct Instance<T> {
   cb: sys::PRJ_CALLBACKS,
 }
 
-pub fn start_proj_virtualization<P: AsRef<Path>, T: ProjFS + helper::RawProjFS>(path: P, this: Box<T>) -> Result<Instance<T>, sys::HRESULT> {
+pub fn start_proj_virtualization<P: AsRef<Path>, T: ProjFS + Sync>(path: P, this: Box<T>) -> Result<Instance<T>, sys::HRESULT> {
   use std::os::windows::prelude::*;
   let mut instance = Instance {
     raw: std::ptr::null_mut(),
@@ -129,7 +134,6 @@ pub fn start_proj_virtualization<P: AsRef<Path>, T: ProjFS + helper::RawProjFS>(
   };
   let path = path.as_ref().canonicalize().unwrap();
   let path_str: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-  println!("start at {:?}", path);
   let result = unsafe {
     // let id = uuid::Uuid::new_v5(uuid::Uuid::NAMESPACE_URL, std::slice::from_raw_parts(path_str.as_ptr(), path_str.len()*2));
     let id = uuid::Uuid::new_v4();
