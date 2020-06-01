@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 pub use projfs_sys as sys;
 
 pub type VersionInfo = *const sys::PRJ_PLACEHOLDER_VERSION_INFO;
-pub type Flags = sys::PRJ_CALLBACK_DATA_FLAGS;
 pub type Guid = uuid::Uuid;
 
 extern "C" {
@@ -28,6 +27,13 @@ impl RawPath {
   }
 }
 
+bitflags::bitflags! {
+pub struct CallbackDataFlags: sys::PRJ_CALLBACK_DATA_FLAGS {
+  const RESTART_SCAN = sys::PRJ_CALLBACK_DATA_FLAGS_PRJ_CB_DATA_FLAG_ENUM_RESTART_SCAN;
+  const RETURN_SINGLE_ENTRY = sys::PRJ_CALLBACK_DATA_FLAGS_PRJ_CB_DATA_FLAG_ENUM_RETURN_SINGLE_ENTRY;
+}
+}
+
 pub fn guid_from_raw(guid: sys::GUID) -> Guid {
   Guid::from_fields(guid.Data1, guid.Data2, guid.Data3, &guid.Data4).expect("guid data4 len")
 }
@@ -45,7 +51,7 @@ pub fn guid_to_raw(guid: Guid) -> sys::GUID {
 pub trait ProjFS {
   fn start_dir_enum(&self, id: Guid, path: RawPath, version: VersionInfo) -> Result<(), sys::HRESULT>;
   fn end_dir_enum(&self, id: Guid, version: VersionInfo) -> Result<(), sys::HRESULT>;
-  fn get_dir_enum(&self, id: Guid, path: RawPath, flags: Flags, version: VersionInfo, pattern: RawPath, result_handle: sys::PRJ_DIR_ENTRY_BUFFER_HANDLE) -> Result<(), sys::HRESULT>;
+  fn get_dir_enum(&self, id: Guid, path: RawPath, flags: CallbackDataFlags, version: VersionInfo, pattern: RawPath, result_handle: sys::PRJ_DIR_ENTRY_BUFFER_HANDLE) -> Result<(), sys::HRESULT>;
 
   fn get_metadata(&self, path: RawPath, version: VersionInfo) -> Result<sys::PRJ_PLACEHOLDER_INFO, sys::HRESULT>;
 
@@ -75,7 +81,14 @@ mod helper {
     ) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      this.get_dir_enum(guid_from_raw(*arg2), data.FilePathName.into(), data.Flags, data.VersionInfo, arg3.into(), arg4).err().unwrap_or_default()
+      this.get_dir_enum(
+        guid_from_raw(*arg2),
+        data.FilePathName.into(),
+        CallbackDataFlags::from_bits(data.Flags).unwrap(),
+        data.VersionInfo,
+        arg3.into(),
+        arg4
+      ).err().unwrap_or_default()
     }
     unsafe extern "C" fn GetPlaceholderInfoCallback(arg1: *const PRJ_CALLBACK_DATA) -> HRESULT {
       let data = arg1.as_ref().unwrap();

@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 projfs-sys = { path = "sys" }
 uuid = { version = "*", features = ["v4"] }
+bitflags = "*"
 
 [dev-dependencies]
 log = "*"
