@@ -12,7 +12,7 @@ uuid = { version = "*", features = ["v4"] }
 bitflags = "*"
 
 [dev-dependencies]
-log = "*"
+chashmap = "*"
 
 [workspace]
 members = [ "sys" ]

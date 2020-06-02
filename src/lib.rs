@@ -2,26 +2,27 @@ use std::path::{Path, PathBuf};
 pub use projfs_sys as sys;
 
 pub type VersionInfo = *const sys::PRJ_PLACEHOLDER_VERSION_INFO;
+pub type DirHandle = sys::PRJ_DIR_ENTRY_BUFFER_HANDLE;
 pub type Guid = uuid::Uuid;
 
 extern "C" {
   fn wcslen(ptr: *const std::os::raw::c_ushort) -> usize;
 }
 
-pub struct RawPath(sys::PCWSTR);
-impl Into<RawPath> for sys::PCWSTR {
-  fn into(self) -> RawPath {
-    RawPath(self)
+pub struct RawPath<'a>(sys::PCWSTR, std::marker::PhantomData<&'a Path>);
+impl From<sys::PCWSTR> for RawPath<'_> {
+  fn from(raw: sys::PCWSTR) -> Self {
+    Self(raw, Default::default())
   }
 }
-impl Into<PathBuf> for RawPath {
+impl Into<PathBuf> for RawPath<'_> {
   fn into(self) -> PathBuf {
     use std::os::windows::prelude::*;
     let ptr = unsafe { std::slice::from_raw_parts(self.0, wcslen(self.0)) };
     std::ffi::OsString::from_wide(ptr).into()
   }
 }
-impl RawPath {
+impl<'a> RawPath<'a> {
   pub fn to_path_buf(self) -> PathBuf {
     self.into()
   }
@@ -48,10 +49,41 @@ pub fn guid_to_raw(guid: Guid) -> sys::GUID {
   }
 }
 
+pub struct FileBasicInfo {
+  pub file_name: PathBuf,
+  pub is_dir: bool,
+  pub file_size: u64,
+  pub created: i64,
+  pub accessed: i64,
+  pub writed: i64,
+  pub changed: i64,
+  pub attrs: u32,
+}
+
 pub trait ProjFS {
   fn start_dir_enum(&self, id: Guid, path: RawPath, version: VersionInfo) -> Result<(), sys::HRESULT>;
   fn end_dir_enum(&self, id: Guid, version: VersionInfo) -> Result<(), sys::HRESULT>;
-  fn get_dir_enum(&self, id: Guid, path: RawPath, flags: CallbackDataFlags, version: VersionInfo, pattern: RawPath, result_handle: sys::PRJ_DIR_ENTRY_BUFFER_HANDLE) -> Result<(), sys::HRESULT>;
+  fn get_dir_enum(&self, id: Guid, path: RawPath, flags: CallbackDataFlags, version: VersionInfo, pattern: RawPath, handle: DirHandle) -> Result<(), sys::HRESULT>;
+
+  fn fill_entries<'a, Iter: Iterator<Item=&'a FileBasicInfo>>(mut iter: Iter, handle: DirHandle) -> usize {
+    let mut k = 0;
+    iter.find_map(|i| {
+      use std::os::windows::ffi::OsStrExt;
+      let mut basic_info = sys::PRJ_FILE_BASIC_INFO {
+        IsDirectory: if i.is_dir { 1 } else { 0 },
+        ChangeTime: i.changed.into(),
+        CreationTime: i.created.into(),
+        LastAccessTime: i.accessed.into(),
+        LastWriteTime: i.writed.into(),
+        FileSize: i.file_size as i64,
+        FileAttributes: i.attrs,
+      };
+      let file_name: Vec<u16> = i.file_name.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+      let hr = unsafe { sys::PrjFillDirEntryBuffer(file_name.as_ptr(), &mut basic_info, handle) };
+      if hr == 0 { None } else { k += 1; Some(hr) }
+    });
+    k
+  }
 
   fn get_metadata(&self, path: RawPath, version: VersionInfo) -> Result<sys::PRJ_PLACEHOLDER_INFO, sys::HRESULT>;
 
