@@ -49,6 +49,19 @@ pub fn guid_to_raw(guid: Guid) -> sys::GUID {
   }
 }
 
+pub fn io_error_to_raw(e: std::io::Error) -> sys::HRESULT {
+  use std::io::ErrorKind::*;
+  if let Some(i) = e.raw_os_error() {
+    return i
+  }
+  match e.kind() {
+    WouldBlock => sys::ERROR_IO_PENDING as sys::HRESULT,
+    NotFound => sys::ERROR_FILE_NOT_FOUND as sys::HRESULT,
+    InvalidData => sys::ERROR_INSUFFICIENT_BUFFER as sys::HRESULT,
+    _ => -1,
+  }
+}
+
 pub struct FileBasicInfo {
   pub file_name: PathBuf,
   pub is_dir: bool,
@@ -61,9 +74,9 @@ pub struct FileBasicInfo {
 }
 
 pub trait ProjFS {
-  fn start_dir_enum(&self, id: Guid, path: RawPath, version: VersionInfo) -> Result<(), sys::HRESULT>;
-  fn end_dir_enum(&self, id: Guid, version: VersionInfo) -> Result<(), sys::HRESULT>;
-  fn get_dir_enum(&self, id: Guid, path: RawPath, flags: CallbackDataFlags, version: VersionInfo, pattern: RawPath, handle: DirHandle) -> Result<(), sys::HRESULT>;
+  fn start_dir_enum(&self, id: Guid, path: RawPath, version: VersionInfo) -> std::io::Result<()>;
+  fn end_dir_enum(&self, id: Guid, version: VersionInfo) -> std::io::Result<()>;
+  fn get_dir_enum(&self, id: Guid, path: RawPath, flags: CallbackDataFlags, version: VersionInfo, pattern: Option<RawPath>, handle: DirHandle) -> std::io::Result<()>;
 
   fn fill_entries<'a, Iter: Iterator<Item=&'a FileBasicInfo>>(mut iter: Iter, handle: DirHandle) -> usize {
     let mut k = 0;
@@ -80,14 +93,14 @@ pub trait ProjFS {
       };
       let file_name: Vec<u16> = i.file_name.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
       let hr = unsafe { sys::PrjFillDirEntryBuffer(file_name.as_ptr(), &mut basic_info, handle) };
-      if hr == 0 { None } else { k += 1; Some(hr) }
+      if hr == 0 { k += 1; None } else { Some(hr) }
     });
     k
   }
 
-  fn get_metadata(&self, path: RawPath, version: VersionInfo) -> Result<sys::PRJ_PLACEHOLDER_INFO, sys::HRESULT>;
+  fn get_metadata(&self, path: RawPath, version: VersionInfo) -> std::io::Result<sys::PRJ_PLACEHOLDER_INFO>;
 
-  fn read(&self, path: RawPath, version: VersionInfo, stream: Guid, offset: u64, len: usize) -> Result<(), sys::HRESULT>;
+  fn read(&self, path: RawPath, version: VersionInfo, stream: Guid, offset: u64, len: usize) -> std::io::Result<()>;
 }
 
 mod helper {
@@ -98,12 +111,21 @@ mod helper {
     unsafe extern "C" fn StartDirectoryEnumerationCallback(arg1: *const PRJ_CALLBACK_DATA, arg2: *const GUID) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      this.start_dir_enum(guid_from_raw(*arg2), data.FilePathName.into(), data.VersionInfo).err().unwrap_or_default()
+      let result = this.start_dir_enum(guid_from_raw(*arg2), data.FilePathName.into(), data.VersionInfo);
+      match result {
+        Ok(()) => 0,
+        Err(e) => io_error_to_raw(e)
+      }
+      // ERROR_FILE_NOT_FOUND
     }
     unsafe extern "C" fn EndDirectoryEnumerationCallback(arg1: *const PRJ_CALLBACK_DATA, arg2: *const GUID) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      this.end_dir_enum(guid_from_raw(*arg2), data.VersionInfo).err().unwrap_or_default()
+      let result = this.end_dir_enum(guid_from_raw(*arg2), data.VersionInfo);
+      match result {
+        Ok(()) => 0,
+        Err(e) => io_error_to_raw(e)
+      }
     }
     unsafe extern "C" fn GetDirectoryEnumerationCallback(
       arg1: *const PRJ_CALLBACK_DATA,
@@ -113,14 +135,19 @@ mod helper {
     ) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      this.get_dir_enum(
+      let result = this.get_dir_enum(
         guid_from_raw(*arg2),
         data.FilePathName.into(),
         CallbackDataFlags::from_bits(data.Flags).unwrap(),
         data.VersionInfo,
-        arg3.into(),
+        if arg3 == std::ptr::null() { None } else { Some(arg3.into()) },
         arg4
-      ).err().unwrap_or_default()
+      );
+      match result {
+        Ok(()) => 0,
+        Err(e) => io_error_to_raw(e)
+      }
+      // ERROR_INSUFFICIENT_BUFFER
     }
     unsafe extern "C" fn GetPlaceholderInfoCallback(arg1: *const PRJ_CALLBACK_DATA) -> HRESULT {
       let data = arg1.as_ref().unwrap();
@@ -129,15 +156,21 @@ mod helper {
         Ok(result) => {
           PrjWritePlaceholderInfo(data.NamespaceVirtualizationContext, data.FilePathName, &result, std::mem::size_of_val(&result) as u32)
         },
-        Err(e) => e,
+        Err(e) => io_error_to_raw(e),
       }
+      // ERROR_FILE_NOT_FOUND
     }
     unsafe extern "C" fn GetFileDataCallback(arg1: *const PRJ_CALLBACK_DATA, arg2: UINT64, arg3: UINT32) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      this.read(data.FilePathName.into(), data.VersionInfo, guid_from_raw(data.DataStreamId), arg2 as u64, arg3 as usize).err().unwrap_or_default()
+      let result = this.read(data.FilePathName.into(), data.VersionInfo, guid_from_raw(data.DataStreamId), arg2 as u64, arg3 as usize);
+      match result {
+        Ok(()) => 0,
+        Err(e) => io_error_to_raw(e)
+      }
+      // S_OK, ERROR_IO_PENDING
     }
-    // unsafe extern "C" fn QueryFileNameCallback(arg1: *const PRJ_CALLBACK_DATA) -> HRESULT;
+    // unsafe extern "C" fn QueryFileNameCallback(arg1: *const PRJ_CALLBACK_DATA) -> HRESULT; // ERROR_FILE_NOT_FOUND
     // unsafe extern "C" fn NotificationCallback(
     //   arg1: *const PRJ_CALLBACK_DATA,
     //   arg2: BOOLEAN,

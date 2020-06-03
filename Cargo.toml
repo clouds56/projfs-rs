@@ -13,6 +13,7 @@ bitflags = "*"
 
 [dev-dependencies]
 chashmap = "*"
+winreg = "*"
 
 [workspace]
 members = [ "sys" ]

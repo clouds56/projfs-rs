@@ -30,6 +30,7 @@ fn main() {
     "PrjFreeAlignedBuffer",
   ].iter().fold(bindings, |b, s| b.whitelist_function(s));
   let bindings = bindings
+    .whitelist_var("S_OK|ERROR_FILE_NOT_FOUND|ERROR_IO_PENDING|ERROR_INSUFFICIENT_BUFFER")
     // Finish the builder and generate the bindings.
     .generate()
     // Unwrap the Result and panic on failure.
