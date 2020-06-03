@@ -1,9 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use projfs::*;
 use chashmap::CHashMap;
 use std::sync::Mutex;
 use winreg::enums::*;
-use winreg::RegKey;
+use winreg::{RegKey, RegValue};
 
 pub struct DirInfo {
   key: Mutex<RegKey>,
@@ -21,15 +21,25 @@ impl DirInfo {
     key.enum_keys()
       .filter_map(|n| {
         let n = n.ok()?;
-        let subkey = key.open_subkey(&n).ok()?;
         FileBasicInfo {
           file_name: n.into(),
           file_size: 0,
           is_dir: true,
-          created: 0,
-          accessed: 0,
-          changed: 0,
-          writed: 0,
+          created: 0, writed: 0, changed: 0, accessed: 0,
+          attrs: 0,
+        }.into()
+      }).collect()
+  }
+  fn get_subvalues(&self) -> Vec<FileBasicInfo> {
+    let key = self.key.lock().unwrap();
+    key.enum_values()
+      .filter_map(|n| {
+        let (n, v) = n.ok()?;
+        FileBasicInfo {
+          file_name: n.into(),
+          file_size: v.bytes.len() as u64,
+          is_dir: false,
+          created: 0, writed: 0, changed: 0, accessed: 0,
           attrs: 0,
         }.into()
       }).collect()
@@ -64,8 +74,10 @@ impl ProjFS for MyProjFS {
     println!("get_dir_enum: {:?} {} {:?} {:?}", path.to_path_buf().display(), id, flags, pattern.map(|i| i.to_path_buf()));
     let mut dir_info = self.dir_enums.get_mut(&id).unwrap();
     if dir_info.cache.is_none() || flags.contains(CallbackDataFlags::RESTART_SCAN) {
-      let sub_keys = dir_info.get_subkeys();
-      dir_info.cache = Some(sub_keys);
+      let keys = dir_info.get_subkeys();
+      let values = dir_info.get_subvalues();
+      println!("found {} + {} entries", keys.len(), values.len());
+      dir_info.cache = Some(keys.into_iter().chain(values).collect());
       dir_info.idx = 0
     }
     if let Some(cache) = &dir_info.cache {
@@ -77,9 +89,31 @@ impl ProjFS for MyProjFS {
       Err(std::io::ErrorKind::NotFound.into())
     }
   }
-  fn get_metadata(&self, path: RawPath, _: VersionInfo) -> std::io::Result<sys::PRJ_PLACEHOLDER_INFO> {
-    println!("read metadata {:?}", path.to_path_buf().display());
-    Err(std::io::ErrorKind::NotFound.into())
+  fn get_metadata(&self, path: RawPath, _: VersionInfo) -> std::io::Result<FileBasicInfo> {
+    let path = path.to_path_buf();
+    println!("read metadata {:?}", path.display());
+    fn open_subvalue(root: &RegKey, path: &Path) -> Option<RegValue> {
+      let parent = path.parent()?;
+      let file_name = path.file_name()?;
+      let key = root.open_subkey(parent).ok()?;
+      key.get_raw_value(file_name).ok()
+    }
+    let root_reg = self.reg_root.lock().unwrap();
+    let size = if root_reg.open_subkey(&path).is_ok() {
+      None
+    } else if let Some(value) = open_subvalue(&root_reg, &path) {
+      Some(value.bytes.len() as u64)
+    } else {
+      return Err(std::io::ErrorKind::NotFound.into())
+    };
+    let result = FileBasicInfo {
+      file_name: path,
+      file_size: size.unwrap_or_default(),
+      is_dir: size.is_none(),
+      created: 0, writed: 0, changed: 0, accessed: 0,
+      attrs: 0,
+    };
+    Ok(result)
   }
   fn read(&self, _: RawPath, _: VersionInfo, _: Guid, _: u64, _: usize) -> std::io::Result<()> { unimplemented!() }
 }

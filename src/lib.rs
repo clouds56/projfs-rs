@@ -73,6 +73,20 @@ pub struct FileBasicInfo {
   pub attrs: u32,
 }
 
+impl Into<sys::PRJ_FILE_BASIC_INFO> for &FileBasicInfo {
+  fn into(self) -> sys::PRJ_FILE_BASIC_INFO {
+    sys::PRJ_FILE_BASIC_INFO {
+      IsDirectory: if self.is_dir { 1 } else { 0 },
+      ChangeTime: self.changed.into(),
+      CreationTime: self.created.into(),
+      LastAccessTime: self.accessed.into(),
+      LastWriteTime: self.writed.into(),
+      FileSize: self.file_size as i64,
+      FileAttributes: self.attrs,
+    }
+  }
+}
+
 pub trait ProjFS {
   fn start_dir_enum(&self, id: Guid, path: RawPath, version: VersionInfo) -> std::io::Result<()>;
   fn end_dir_enum(&self, id: Guid, version: VersionInfo) -> std::io::Result<()>;
@@ -82,15 +96,7 @@ pub trait ProjFS {
     let mut k = 0;
     iter.find_map(|i| {
       use std::os::windows::ffi::OsStrExt;
-      let mut basic_info = sys::PRJ_FILE_BASIC_INFO {
-        IsDirectory: if i.is_dir { 1 } else { 0 },
-        ChangeTime: i.changed.into(),
-        CreationTime: i.created.into(),
-        LastAccessTime: i.accessed.into(),
-        LastWriteTime: i.writed.into(),
-        FileSize: i.file_size as i64,
-        FileAttributes: i.attrs,
-      };
+      let mut basic_info = i.into();
       let file_name: Vec<u16> = i.file_name.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
       let hr = unsafe { sys::PrjFillDirEntryBuffer(file_name.as_ptr(), &mut basic_info, handle) };
       if hr == 0 { k += 1; None } else { Some(hr) }
@@ -98,7 +104,7 @@ pub trait ProjFS {
     k
   }
 
-  fn get_metadata(&self, path: RawPath, version: VersionInfo) -> std::io::Result<sys::PRJ_PLACEHOLDER_INFO>;
+  fn get_metadata(&self, path: RawPath, version: VersionInfo) -> std::io::Result<FileBasicInfo>;
 
   fn read(&self, path: RawPath, version: VersionInfo, stream: Guid, offset: u64, len: usize) -> std::io::Result<()>;
 }
@@ -154,7 +160,9 @@ mod helper {
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
       match this.get_metadata(data.FilePathName.into(), data.VersionInfo) {
         Ok(result) => {
-          PrjWritePlaceholderInfo(data.NamespaceVirtualizationContext, data.FilePathName, &result, std::mem::size_of_val(&result) as u32)
+          let mut placeholder_info: sys::PRJ_PLACEHOLDER_INFO = std::mem::zeroed();
+          placeholder_info.FileBasicInfo = (&result).into();
+          PrjWritePlaceholderInfo(data.NamespaceVirtualizationContext, data.FilePathName, &placeholder_info, std::mem::size_of_val(&placeholder_info) as u32)
         },
         Err(e) => io_error_to_raw(e),
       }
