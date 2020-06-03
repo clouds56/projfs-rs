@@ -58,6 +58,12 @@ impl MyProjFS {
       reg_root: Mutex::new(hklm),
     }
   }
+  fn open_subvalue(root: &RegKey, path: &Path) -> Option<RegValue> {
+    let parent = path.parent()?;
+    let file_name = path.file_name()?;
+    let key = root.open_subkey(parent).ok()?;
+    key.get_raw_value(file_name).ok()
+  }
 }
 impl ProjFS for MyProjFS {
   fn start_dir_enum(&self, id: Guid, path: RawPath, _: VersionInfo) -> std::io::Result<()> {
@@ -92,16 +98,10 @@ impl ProjFS for MyProjFS {
   fn get_metadata(&self, path: RawPath, _: VersionInfo) -> std::io::Result<FileBasicInfo> {
     let path = path.to_path_buf();
     println!("read metadata {:?}", path.display());
-    fn open_subvalue(root: &RegKey, path: &Path) -> Option<RegValue> {
-      let parent = path.parent()?;
-      let file_name = path.file_name()?;
-      let key = root.open_subkey(parent).ok()?;
-      key.get_raw_value(file_name).ok()
-    }
     let root_reg = self.reg_root.lock().unwrap();
     let size = if root_reg.open_subkey(&path).is_ok() {
       None
-    } else if let Some(value) = open_subvalue(&root_reg, &path) {
+    } else if let Some(value) = Self::open_subvalue(&root_reg, &path) {
       Some(value.bytes.len() as u64)
     } else {
       return Err(std::io::ErrorKind::NotFound.into())
@@ -115,7 +115,16 @@ impl ProjFS for MyProjFS {
     };
     Ok(result)
   }
-  fn read(&self, _: RawPath, _: VersionInfo, _: Guid, _: u64, _: usize) -> std::io::Result<()> { unimplemented!() }
+  fn read(&self, path: RawPath, _: VersionInfo, offset: u64, buf: &mut [u8]) -> std::io::Result<()> {
+    let path = path.to_path_buf();
+    println!("read content {:?} {}-{}", path.display(), offset, offset + buf.len() as u64);
+    if let Some(value) = Self::open_subvalue(&self.reg_root.lock().unwrap(), &path) {
+      buf.copy_from_slice(&value.bytes[offset as usize..offset as usize + buf.len()]);
+      Ok(())
+    } else {
+      return Err(std::io::ErrorKind::NotFound.into())
+    }
+  }
 }
 
 fn main() {

@@ -87,6 +87,22 @@ impl Into<sys::PRJ_FILE_BASIC_INFO> for &FileBasicInfo {
   }
 }
 
+struct AlignedBuffer(*mut std::ffi::c_void, usize);
+impl AlignedBuffer {
+  pub fn new(context: sys::PRJ_NAMESPACE_VIRTUALIZATION_CONTEXT, len: usize) -> Self {
+    let raw = unsafe { sys::PrjAllocateAlignedBuffer(context, len as u64) };
+    Self(raw, len)
+  }
+  pub fn as_slice_mut(&mut self) -> &mut [u8] {
+    unsafe { std::slice::from_raw_parts_mut(self.0 as *mut _, self.1) }
+  }
+}
+impl Drop for AlignedBuffer {
+  fn drop(&mut self) {
+    unsafe { sys::PrjFreeAlignedBuffer(self.0) }
+  }
+}
+
 pub trait ProjFS {
   fn start_dir_enum(&self, id: Guid, path: RawPath, version: VersionInfo) -> std::io::Result<()>;
   fn end_dir_enum(&self, id: Guid, version: VersionInfo) -> std::io::Result<()>;
@@ -106,7 +122,7 @@ pub trait ProjFS {
 
   fn get_metadata(&self, path: RawPath, version: VersionInfo) -> std::io::Result<FileBasicInfo>;
 
-  fn read(&self, path: RawPath, version: VersionInfo, stream: Guid, offset: u64, len: usize) -> std::io::Result<()>;
+  fn read(&self, path: RawPath, version: VersionInfo, offset: u64, buf: &mut [u8]) -> std::io::Result<()>;
 }
 
 mod helper {
@@ -171,9 +187,12 @@ mod helper {
     unsafe extern "C" fn GetFileDataCallback(arg1: *const PRJ_CALLBACK_DATA, arg2: UINT64, arg3: UINT32) -> HRESULT {
       let data = arg1.as_ref().unwrap();
       let this = (data.InstanceContext as *mut Self).as_ref().unwrap();
-      let result = this.read(data.FilePathName.into(), data.VersionInfo, guid_from_raw(data.DataStreamId), arg2 as u64, arg3 as usize);
+      let mut buf = AlignedBuffer::new(data.NamespaceVirtualizationContext, arg3 as usize);
+      let result = this.read(data.FilePathName.into(), data.VersionInfo, arg2, buf.as_slice_mut());
       match result {
-        Ok(()) => 0,
+        Ok(()) => {
+          sys::PrjWriteFileData(data.NamespaceVirtualizationContext, &data.DataStreamId, buf.0, arg2, arg3)
+        },
         Err(e) => io_error_to_raw(e)
       }
       // S_OK, ERROR_IO_PENDING
