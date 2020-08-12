@@ -3,10 +3,16 @@ name = "projfs-sys"
 version = "0.1.0"
 authors = ["Clouds Flowing <clouds.flowing@gmail.com>"]
 edition = "2018"
+description = "Low-level bindings for Windows Projected Filesystem API"
+license = "MIT"
+repository = "https://github.com/clouds56/projfs-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 
 [build-dependencies]
-bindgen = "*"
+bindgen = { version = "0.54", optional = true }
+
+[features]
+default = []

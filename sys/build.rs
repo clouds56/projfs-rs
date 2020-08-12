@@ -1,5 +1,3 @@
-extern crate bindgen;
-
 const fn target_arch() -> &'static str {
   #[cfg(target_os="windows")] {
     #[cfg(target_arch="x86")] {"x86"}
@@ -9,16 +7,8 @@ const fn target_arch() -> &'static str {
   }
 }
 
-fn main() {
-  let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-  // Tell cargo to tell rustc to link the system bzip2
-  // shared library.
-  println!("cargo:rustc-link-lib=ProjectedFSLib");
-  println!("cargo:rustc-link-search={}/lib/{}", manifest_dir, target_arch());
-
-  // Tell cargo to invalidate the built crate whenever the wrapper changes
-  println!("cargo:rerun-if-changed=wrapper.h");
-
+#[cfg(feature = "bindgen")]
+fn gen_bindings() {
   // The bindgen::Builder is the main entry point
   // to bindgen, and lets you build up options for
   // the resulting bindings.
@@ -51,8 +41,25 @@ fn main() {
 
   // Write the bindings to the $OUT_DIR/bindings.rs file.
   // let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-  let out_path = std::path::Path::new("src");
+  let out_path = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
   bindings
     .write_to_file(out_path.join("bindings.rs"))
     .expect("Couldn't write bindings!");
+}
+
+#[cfg(not(feature = "bindgen"))]
+fn gen_bindings() { }
+
+fn main() {
+  let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+  // Tell cargo to tell rustc to link the system bzip2
+  // shared library.
+  println!("cargo:rustc-link-lib=ProjectedFSLib");
+  println!("cargo:rustc-link-search={}/lib/{}", manifest_dir, target_arch());
+
+  // Tell cargo to invalidate the built crate whenever the wrapper changes
+  println!("cargo:rerun-if-changed=wrapper.h");
+  println!("cargo:rerun-if-changed=projectedfslib.h");
+
+  gen_bindings()
 }
