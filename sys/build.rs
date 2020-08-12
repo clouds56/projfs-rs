@@ -1,9 +1,20 @@
 extern crate bindgen;
 
+const fn target_arch() -> &'static str {
+  #[cfg(target_os="windows")] {
+    #[cfg(target_arch="x86")] {"x86"}
+    #[cfg(target_arch="x86_64")] {"x64"}
+    #[cfg(target_arch="aarch64")] {"arm64"}
+    #[cfg(target_arch="arm")] {"arm"}
+  }
+}
+
 fn main() {
+  let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
   // Tell cargo to tell rustc to link the system bzip2
   // shared library.
   println!("cargo:rustc-link-lib=ProjectedFSLib");
+  println!("cargo:rustc-link-search={}/lib/{}", manifest_dir, target_arch());
 
   // Tell cargo to invalidate the built crate whenever the wrapper changes
   println!("cargo:rerun-if-changed=wrapper.h");
@@ -30,7 +41,9 @@ fn main() {
     "PrjFreeAlignedBuffer",
   ].iter().fold(bindings, |b, s| b.whitelist_function(s));
   let bindings = bindings
-    .whitelist_var("S_OK|ERROR_FILE_NOT_FOUND|ERROR_IO_PENDING|ERROR_INSUFFICIENT_BUFFER")
+    .whitelist_type("IO_ERROR")
+    // UB: https://github.com/rust-lang/rust/issues/36927
+    // .rustified_non_exhaustive_enum("IO_ERROR")
     // Finish the builder and generate the bindings.
     .generate()
     // Unwrap the Result and panic on failure.

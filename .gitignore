@@ -2,3 +2,5 @@ target
 Cargo.lock
 .vscode
 /test_dir
+
+*.h.gch

@@ -55,9 +55,9 @@ pub fn io_error_to_raw(e: std::io::Error) -> sys::HRESULT {
     return i
   }
   match e.kind() {
-    WouldBlock => sys::ERROR_IO_PENDING as sys::HRESULT,
-    NotFound => sys::ERROR_FILE_NOT_FOUND as sys::HRESULT,
-    InvalidData => sys::ERROR_INSUFFICIENT_BUFFER as sys::HRESULT,
+    WouldBlock => sys::IO_ERROR_IO_PENDING as sys::HRESULT,
+    NotFound => sys::IO_ERROR_FILE_NOT_FOUND as sys::HRESULT,
+    InvalidData => sys::IO_ERROR_INSUFFICIENT_BUFFER as sys::HRESULT,
     _ => -1,
   }
 }
