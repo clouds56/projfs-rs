@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 pub use projfs_sys as sys;
 
+pub type CacheMap<T> = chashmap::CHashMap<Guid, Option<std::iter::Peekable<T>>>;
+
 pub type VersionInfo = *const sys::PRJ_PLACEHOLDER_VERSION_INFO;
 pub type DirHandle = sys::PRJ_DIR_ENTRY_BUFFER_HANDLE;
 pub type Guid = uuid::Uuid;
@@ -73,6 +75,12 @@ pub struct FileBasicInfo {
   pub attrs: u32,
 }
 
+impl AsRef<FileBasicInfo> for FileBasicInfo {
+  fn as_ref(&self) -> &Self {
+    self
+  }
+}
+
 impl Into<sys::PRJ_FILE_BASIC_INFO> for &FileBasicInfo {
   fn into(self) -> sys::PRJ_FILE_BASIC_INFO {
     sys::PRJ_FILE_BASIC_INFO {
@@ -103,20 +111,62 @@ impl Drop for AlignedBuffer {
   }
 }
 
+pub trait ProjFSDirEnum {
+  type DirIter: Iterator<Item=FileBasicInfo>;
+  fn dir_iter(&self, id: Guid, path: RawPath, pattern: Option<RawPath>, version: VersionInfo) -> std::io::Result<Self::DirIter>;
+  fn dir_iter_cache(&self, version: VersionInfo) -> &CacheMap<Self::DirIter>;
+}
+
+pub trait ProjFSRead {
+  fn get_metadata(&self, path: RawPath, version: VersionInfo) -> std::io::Result<FileBasicInfo>;
+  fn read(&self, path: RawPath, version: VersionInfo, offset: u64, buf: &mut [u8]) -> std::io::Result<()>;
+}
+
+impl<T: ProjFSDirEnum + ProjFSRead> ProjFS for T {
+  fn start_dir_enum(&self, id: Guid, _path: RawPath, version: VersionInfo) -> std::io::Result<()> {
+    self.dir_iter_cache(version).insert_new(id, None); Ok(())
+  }
+  fn end_dir_enum(&self, id: Guid, version: VersionInfo) -> std::io::Result<()> {
+    self.dir_iter_cache(version).remove(&id); Ok(())
+  }
+  fn get_dir_enum(&self, id: Guid, path: RawPath, flags: CallbackDataFlags, version: VersionInfo, pattern: Option<RawPath>, handle: DirHandle) -> std::io::Result<()> {
+    let cache = self.dir_iter_cache(version);
+    let mut dir_iter = &mut cache.get_mut(&id).ok_or(std::io::ErrorKind::InvalidData)?;
+    let dir_iter: &mut Option<_> = &mut dir_iter;
+    if dir_iter.is_none() || flags.contains(CallbackDataFlags::RESTART_SCAN) {
+      dir_iter.replace(self.dir_iter(id, path, pattern, version)?.peekable());
+    }
+    if let Some(ref mut dir_iter) = dir_iter {
+      Self::fill_entries(dir_iter, handle);
+    }
+    Ok(())
+  }
+
+  fn get_metadata(&self, path: RawPath, version: VersionInfo) -> std::io::Result<FileBasicInfo> {
+    ProjFSRead::get_metadata(self, path, version)
+  }
+
+  fn read(&self, path: RawPath, version: VersionInfo, offset: u64, buf: &mut [u8]) -> std::io::Result<()> {
+    ProjFSRead::read(self, path, version, offset, buf)
+  }
+}
+
 pub trait ProjFS {
   fn start_dir_enum(&self, id: Guid, path: RawPath, version: VersionInfo) -> std::io::Result<()>;
   fn end_dir_enum(&self, id: Guid, version: VersionInfo) -> std::io::Result<()>;
   fn get_dir_enum(&self, id: Guid, path: RawPath, flags: CallbackDataFlags, version: VersionInfo, pattern: Option<RawPath>, handle: DirHandle) -> std::io::Result<()>;
 
-  fn fill_entries<'a, Iter: Iterator<Item=&'a FileBasicInfo>>(mut iter: Iter, handle: DirHandle) -> usize {
+  fn fill_entries<'a, I: AsRef<FileBasicInfo>, Iter: Iterator<Item=I>>(iter: &mut std::iter::Peekable<Iter>, handle: DirHandle) -> usize {
     let mut k = 0;
-    iter.find_map(|i| {
+    while let Some(i) = iter.peek() {
       use std::os::windows::ffi::OsStrExt;
+      let i = i.as_ref();
       let mut basic_info = i.into();
       let file_name: Vec<u16> = i.file_name.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
       let hr = unsafe { sys::PrjFillDirEntryBuffer(file_name.as_ptr(), &mut basic_info, handle) };
-      if hr == 0 { k += 1; None } else { Some(hr) }
-    });
+      if hr == 0 { k += 1; } else { return k }
+      iter.next();
+    }
     k
   }
 

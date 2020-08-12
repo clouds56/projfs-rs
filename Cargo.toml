@@ -10,9 +10,9 @@ edition = "2018"
 projfs-sys = { path = "sys" }
 uuid = { version = "*", features = ["v4"] }
 bitflags = "*"
+chashmap = "*"
 
 [dev-dependencies]
-chashmap = "*"
 winreg = "*"
 
 [workspace]

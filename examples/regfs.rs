@@ -1,19 +1,16 @@
 use std::path::{Path, PathBuf};
 use projfs::*;
-use chashmap::CHashMap;
 use std::sync::Mutex;
 use winreg::enums::*;
 use winreg::{RegKey, RegValue};
 
 pub struct DirInfo {
   key: Mutex<RegKey>,
-  cache: Option<Vec<FileBasicInfo>>,
-  idx: usize,
 }
 impl DirInfo {
   fn new(root: &RegKey, path: PathBuf) -> std::io::Result<Self> {
     Ok(Self {
-      key: Mutex::new(root.open_subkey(path)?), idx: 0, cache: None
+      key: Mutex::new(root.open_subkey(path)?),
     })
   }
   fn get_subkeys(&self) -> Vec<FileBasicInfo> {
@@ -47,7 +44,7 @@ impl DirInfo {
 }
 
 pub struct MyProjFS {
-  dir_enums: CHashMap<Guid, DirInfo>,
+  dir_enums: CacheMap<Box<dyn Iterator<Item=FileBasicInfo> + Send + Sync>>,
   reg_root: Mutex<RegKey>,
 }
 impl MyProjFS {
@@ -65,36 +62,21 @@ impl MyProjFS {
     key.get_raw_value(file_name).ok()
   }
 }
-impl ProjFS for MyProjFS {
-  fn start_dir_enum(&self, id: Guid, path: RawPath, _: VersionInfo) -> std::io::Result<()> {
-    let path: PathBuf = path.into();
-    println!("start_dir_enum: {:?} {}", path.display(), id);
-    let _ = self.dir_enums.insert(id, DirInfo::new(&self.reg_root.lock().unwrap(), path)?);
-    Ok(())
+
+impl ProjFSDirEnum for MyProjFS {
+  type DirIter = Box<dyn Iterator<Item=FileBasicInfo> + Send + Sync>;
+  fn dir_iter(&self, _id: Guid, path: RawPath, _pattern: Option<RawPath>, _version: VersionInfo) -> std::io::Result<Self::DirIter> {
+    let dir_info = DirInfo::new(&self.reg_root.lock().unwrap(), path.into())?;
+    let keys = dir_info.get_subkeys();
+    let values = dir_info.get_subvalues();
+    println!("found {} + {} entries", keys.len(), values.len());
+    Ok(Box::new(keys.into_iter().chain(values)))
   }
-  fn end_dir_enum(&self, id: Guid, _: VersionInfo) -> std::io::Result<()> {
-    self.dir_enums.remove(&id);
-    Ok(())
+  fn dir_iter_cache(&self, _version: VersionInfo) -> &CacheMap<Self::DirIter> {
+    &self.dir_enums
   }
-  fn get_dir_enum(&self, id: Guid, path: RawPath, flags: CallbackDataFlags, _: VersionInfo, pattern: Option<RawPath>, handle: DirHandle) -> std::io::Result<()> {
-    println!("get_dir_enum: {:?} {} {:?} {:?}", path.to_path_buf().display(), id, flags, pattern.map(|i| i.to_path_buf()));
-    let mut dir_info = self.dir_enums.get_mut(&id).unwrap();
-    if dir_info.cache.is_none() || flags.contains(CallbackDataFlags::RESTART_SCAN) {
-      let keys = dir_info.get_subkeys();
-      let values = dir_info.get_subvalues();
-      println!("found {} + {} entries", keys.len(), values.len());
-      dir_info.cache = Some(keys.into_iter().chain(values).collect());
-      dir_info.idx = 0
-    }
-    if let Some(cache) = &dir_info.cache {
-      let k = Self::fill_entries(cache[dir_info.idx..].iter(), handle);
-      println!("fill {} entries out of {}..{}", k, dir_info.idx, cache.len());
-      dir_info.idx += k;
-      Ok(())
-    } else {
-      Err(std::io::ErrorKind::NotFound.into())
-    }
-  }
+}
+impl ProjFSRead for MyProjFS {
   fn get_metadata(&self, path: RawPath, _: VersionInfo) -> std::io::Result<FileBasicInfo> {
     let path = path.to_path_buf();
     println!("read metadata {:?}", path.display());
