@@ -1,10 +1,13 @@
-const fn target_arch() -> &'static str {
+#[cfg(feature = "bindgen")]
+const fn target_arch() -> Option<&'static str> {
+  #[cfg(not(target_os="windows"))]
+  { None }
   #[cfg(target_os="windows")] {
     #[cfg(target_arch="x86")] {"x86"}
     #[cfg(target_arch="x86_64")] {"x64"}
     #[cfg(target_arch="aarch64")] {"arm64"}
     #[cfg(target_arch="arm")] {"arm"}
-  }
+  }.into()
 }
 
 #[cfg(feature = "bindgen")]
@@ -51,11 +54,14 @@ fn gen_bindings() {
 fn gen_bindings() { }
 
 fn main() {
-  let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
   // Tell cargo to tell rustc to link the system bzip2
   // shared library.
   println!("cargo:rustc-link-lib=ProjectedFSLib");
-  println!("cargo:rustc-link-search={}/lib/{}", manifest_dir, target_arch());
+  #[cfg(feature = "bindgen")]
+  if let Some(arch) = target_arch() {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    println!("cargo:rustc-link-search={}/lib/{}", manifest_dir, arch);
+  }
 
   // Tell cargo to invalidate the built crate whenever the wrapper changes
   println!("cargo:rerun-if-changed=wrapper.h");
