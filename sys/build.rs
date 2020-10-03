@@ -1,13 +1,12 @@
-#[cfg(feature = "bindgen")]
 const fn target_arch() -> Option<&'static str> {
   #[cfg(not(target_os="windows"))]
   { None }
   #[cfg(target_os="windows")] {
-    #[cfg(target_arch="x86")] {"x86"}
-    #[cfg(target_arch="x86_64")] {"x64"}
-    #[cfg(target_arch="aarch64")] {"arm64"}
-    #[cfg(target_arch="arm")] {"arm"}
-  }.into()
+    #[cfg(target_arch="x86")] {Some("x86")}
+    #[cfg(target_arch="x86_64")] {Some("x64")}
+    #[cfg(target_arch="aarch64")] {Some("arm64")}
+    #[cfg(target_arch="arm")] {Some("arm")}
+  }
 }
 
 #[cfg(feature = "bindgen")]
@@ -57,7 +56,6 @@ fn main() {
   // Tell cargo to tell rustc to link the system bzip2
   // shared library.
   println!("cargo:rustc-link-lib=ProjectedFSLib");
-  #[cfg(feature = "bindgen")]
   if let Some(arch) = target_arch() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     println!("cargo:rustc-link-search={}/lib/{}", manifest_dir, arch);
