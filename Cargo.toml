@@ -1,6 +1,6 @@
 [package]
 name = "projfs"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Clouds Flowing <clouds.flowing@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -14,7 +14,7 @@ default-target = "x86_64-pc-windows-msvc"
 targets = ["aarch64-pc-windows-msvc", "i686-pc-windows-msvc", "x86_64-pc-windows-msvc"]
 
 [dependencies]
-projfs-sys = { version = "=0.1.1", path = "sys" }
+projfs-sys = { version = "=0.1.2", path = "sys" }
 uuid = { version = "0.8", features = ["v4"] }
 bitflags = "1.0"
 chashmap = "2.0"
